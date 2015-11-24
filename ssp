@@ -8049,6 +8049,53 @@ sub check_ea4_php_fpm {
     return 1;
 }
 
+sub check_generic_rootkit {
+    my $pid_max = read_file( '/proc/sys/kernel/pid_max' );
+    return unless $pid_max;
+
+    my @hidden;
+
+    # skip init process (pid 1)
+    for( my $pid=2; $pid <= $pid_max; $pid++ ) {
+        my $path = qq{/proc/$pid/cmdline};
+        my $info = get_pid_cmd( $pid );
+
+        next if( ( $path && $info ) || ( !$path && !$info ) );
+
+        push @hidden, $pid;
+    }
+
+    if( @hidden ) {
+        print_warning( "POSSIBLE rootkit(s) installed.  Hidden process found with pid(s): @hidden" );
+    }
+}
+
+# TODO: See if you can use $PROCESS_REF instead of this
+sub get_pid_cmd {
+    my $pid = shift;
+    my $cmd = qq{/bin/ps -p $pid -o cmd h};
+    my $out = `$cmd 2>/dev/null`;
+    chomp $out;
+    return $out;
+}
+
+sub read_file {
+    my $path = shift;
+    my $ref;
+
+    if( open( my $fh, '<', $path ) ) {
+        local $/ = undef;
+        my $str = <$fh>;
+        $ref = \$str;
+        close $fh;
+    }
+    else {
+        warn "Unable to open for reading, $path: $!";
+    }
+
+    return $ref;
+}
+
 sub print_bug_report {
     my $version     = $CPANEL_VERSION ? $CPANEL_VERSION : 'Unknown';
     my $os          = get_os_release();
